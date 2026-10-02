@@ -1,4 +1,4 @@
-yaml
+
 name: Build MacWSWindowing (Apple ld64)
 
 on:
