@@ -1,0 +1,58 @@
+name: Build MacWSWindowing (Apple ld64)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Theos
+        run: |
+          export THEOS=$HOME/theos
+          git clone --recursive https://github.com/theos/theos.git $THEOS
+          echo "THEOS=$THEOS" >> $GITHUB_ENV
+
+      - name: Build MacWSWindowing
+        run: |
+          cd MacWSWindowing
+          gmake clean all FINALPACKAGE=1 STRIP=0 OPTFLAG=-O2 \
+            THEOS_PACKAGE_SCHEME=rootless GO_EASY_ON_ME=1
+
+      - name: Verify fixups
+        run: |
+          BINARY=MacWSWindowing/.theos/obj/MacWSWindowing.dylib
+          ls -la "$BINARY"
+          dyld_info -arch arm64e -fixups "$BINARY" > /tmp/fixups.txt
+          AUTH=$(awk '$2 == "__cfstring" && $4 == "auth-bind" && /key=DA/ { count++ } END { print count+0 }' /tmp/fixups.txt)
+          PLAIN=$(awk '$2 == "__cfstring" && $4 == "bind" { count++ } END { print count+0 }' /tmp/fixups.txt)
+          echo "auth-bind count: $AUTH"
+          echo "plain-bind count: $PLAIN"
+          if [ "$AUTH" -lt 1 ] || [ "$PLAIN" -ne 0 ]; then
+            echo "ERROR: fixup verification failed!"
+            exit 1
+          fi
+          echo "Fixups verified OK"
+
+      - name: Package artifacts
+        run: |
+          BINARY=MacWSWindowing/.theos/obj/MacWSWindowing.dylib
+          mkdir -p artifact
+          cp "$BINARY" artifact/MacWSWindowing.dylib
+          sha256sum artifact/MacWSWindowing.dylib | awk '{print $1}' > artifact/MacWSWindowing.sha256
+          echo '{"generated_by":"github-actions","note":"place in /var/jb/var/mobile/macws-cross-build/"}' > artifact/MacWSWindowing.build.json
+          echo "=== SHA256 ==="
+          cat artifact/MacWSWindowing.sha256
+          echo "=== Files ==="
+          ls -la artifact/
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MacWSWindowing-cross-build
+          path: artifact/
