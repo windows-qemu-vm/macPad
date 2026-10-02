@@ -12,11 +12,14 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Install Theos
+      - name: Install Theos + ldid
         run: |
           export THEOS=$HOME/theos
           git clone --recursive https://github.com/theos/theos.git $THEOS
           echo "THEOS=$THEOS" >> $GITHUB_ENV
+          echo "$THEOS/bin" >> $GITHUB_PATH
+          brew install ldid 2>/dev/null || true
+          which ldid && ldid -v || echo "ldid from Theos will be used"
 
       - name: Build MacWSWindowing
         run: |
@@ -44,7 +47,7 @@ jobs:
           BINARY=MacWSWindowing/.theos/obj/MacWSWindowing.dylib
           mkdir -p artifact
           cp "$BINARY" artifact/MacWSWindowing.dylib
-          sha256sum artifact/MacWSWindowing.dylib | awk '{print $1}' > artifact/MacWSWindowing.sha256
+          shasum -a 256 artifact/MacWSWindowing.dylib | awk '{print $1}' > artifact/MacWSWindowing.sha256
           echo '{"generated_by":"github-actions","note":"place in /var/jb/var/mobile/macws-cross-build/"}' > artifact/MacWSWindowing.build.json
           echo "=== SHA256 ==="
           cat artifact/MacWSWindowing.sha256
